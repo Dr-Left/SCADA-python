@@ -3,6 +3,8 @@ run this script to create databases for testing & debugging
 """
 from sqlalchemy import create_engine
 
+operation_map = {"yc": 1, "yx": 2, "yt": 3, "yk": 4}
+
 ems_tables = [
     {
         "name": "ems_rtu_info",
@@ -29,7 +31,7 @@ ems_tables = [
         "primary keys": [1, 1, 0, 0, 0, 0]
     },
     {
-        "name": "ems_yt_info",
+        "name": "ems_yk_info",
         "columns": ["rtu_id", "pnt_no", "name", "value", "refresh_time", "ret_code"],
         "attribution": ["int", "int", "varchar2(64)", "float", "int", "int"],
         "primary keys": [1, 1, 0, 0, 0, 0]
@@ -129,14 +131,61 @@ def create_table(connection, tables):
         connection.execute(final_sql_st)
 
 
-def get_server_addr(rtu_id, database_name, table_name):
+def get_server_addr(database_name, table_name, rtu_id=None):
     # establishing a connection to database
     engine = create_engine("sqlite:///db/" + database_name)
     with engine.connect() as conn:
-        results = conn.execute(f"select ip_addr, port from {table_name} where id = {rtu_id}")
-        for ip_addr, port in results:
-            return ip_addr, port
-        return None
+        if rtu_id is None:
+            results = conn.execute(f"select id, ip_addr, port from {table_name}")
+            return list(results)
+        else:
+            results = conn.execute(f"select ip_addr, port from {table_name} where id = {rtu_id}")
+            for ip_addr, port in results:
+                return ip_addr, port
+            return None
+
+
+def get_tele_data(rtu_id, operation="yc"):
+    # establishing a connection to database
+    engine = create_engine(f"sqlite:///db/rtu{rtu_id}.db")
+    with engine.connect() as conn:
+        results = conn.execute(f"select * from rtu_{operation}_info")
+        if results:
+            # print(rtu_tables[operation_map[operation]]["columns"])
+            li = [dict(zip(rtu_tables[operation_map[operation]]["columns"], result)) for result in results]
+            # print(li)
+            return li
+        else:
+            return None
+
+
+def update_tele_data(datas):
+    engine = create_engine("sqlite:///db/ems.db")
+    with engine.connect() as conn:
+        for data in datas:
+            pnt_no = data["id"]
+            operation = data["name"][:2]
+            rtu_id = int(data["name"][6:7])
+            try:
+                record = dict(zip(ems_tables[operation_map[operation]]["columns"],
+                                  [rtu_id, pnt_no, data["name"], data["value"], data["status"], data["refresh_time"]]))
+            except Exception as err:
+                print("Bad data columns!", err)
+                return None
+
+                #  ["rtu_id", "pnt_no", "name", "value", "status", "refresh_time"]
+            if len(conn.execute(
+                    f"select * from ems_{operation}_info where rtu_id = {rtu_id} and pnt_no = {pnt_no}").fetchall()):
+                # already exists
+                conn.execute(
+                    f"update ems_{operation}_info set (value, status, refresh_time) = (:value, :status, :refresh_time)",
+                    record)
+            else:
+                # newly insert
+                print(data)
+                conn.execute(
+                    f'insert into ems_{operation}_info values(:rtu_id, :pnt_no, :name, :value, :status, :refresh_time)',
+                    record)
 
 
 if __name__ == "__main__":
