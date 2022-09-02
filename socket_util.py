@@ -2,8 +2,8 @@ import json
 import struct
 
 
-def send(sock, _type, data, lock) -> None:
-    send_data = {"type": _type, "data": data}
+def send(sock, type_, data, lock) -> None:
+    send_data = {"type": type_, "data": data}
     body = json.dumps(send_data).encode("utf-8")  # body is a json string which represents a dict of type & data
     header = struct.pack("i", len(body))
     # TODO: lock    print("send:", header, body)
@@ -30,6 +30,6 @@ def recv(sock) -> tuple[str, dict]:
     except Exception as err:
         print("Json parsing error! Bad data:", err)
         print("Error message: ", header, bytes)
-    print("receive", header, msg)
+    # print("receive", header, msg)
 
     return body["type"], body["data"]

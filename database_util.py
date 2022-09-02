@@ -21,7 +21,7 @@ ems_tables = [
     {
         "name": "ems_yx_info",
         "columns": ["rtu_id", "pnt_no", "name", "value", "status", "refresh_time"],
-        "attribution": ["int", "int", "varchar2(64)", "float", "int", "int"],
+        "attribution": ["int", "int", "varchar2(64)", "int", "int", "int"],
         "primary keys": [1, 1, 0, 0, 0, 0]
     },
     {
@@ -33,7 +33,7 @@ ems_tables = [
     {
         "name": "ems_yk_info",
         "columns": ["rtu_id", "pnt_no", "name", "value", "refresh_time", "ret_code"],
-        "attribution": ["int", "int", "varchar2(64)", "float", "int", "int"],
+        "attribution": ["int", "int", "varchar2(64)", "int", "int", "int"],
         "primary keys": [1, 1, 0, 0, 0, 0]
     },
 ]
@@ -54,7 +54,7 @@ rtu_tables = [
     {
         "name": "rtu_yx_info",
         "columns": ["id", "name", "value", "status", "refresh_time"],
-        "attribution": ["int", "varchar2(64)", "float", "int", "int"],
+        "attribution": ["int", "varchar2(64)", "int", "int", "int"],
         "primary keys": [1, 0, 0, 0, 0]
     },
     {
@@ -66,7 +66,7 @@ rtu_tables = [
     {
         "name": "rtu_yk_info",
         "columns": ["id", "name", "value", "refresh_time", "ctrl_code"],
-        "attribution": ["int", "varchar2(64)", "float", "int", "int"],
+        "attribution": ["int", "varchar2(64)", "int", "int", "int"],
         "primary keys": [1, 0, 0, 0, 0]
     },
 ]
@@ -93,7 +93,7 @@ def work():
                 name = table["name"][4:6]  # yc
                 column_cnt = len(table["columns"])
                 for i in range(1, 7):
-                    record = {"id": i, "name": name + f".rtu{rtu_id}.{i}", "value": 0.0, "status": 0, "refresh_time": 0}
+                    record = {"id": i, "name": name + f".rtu{rtu_id}.{i}", "value": 0, "status": 0, "refresh_time": 0}
                     records.append(record)
                 # print(records)
                 conn2.execute(f"insert into rtu_{name}_info values(:id, :name, :value, :status, :refresh_time)",
@@ -145,7 +145,7 @@ def get_server_addr(database_name, table_name, rtu_id=None):
             return None
 
 
-def get_tele_data(rtu_id, operation="yc"):
+def get_rtu_data(rtu_id, operation, _lock):
     # establishing a connection to database
     engine = create_engine(f"sqlite:///db/rtu{rtu_id}.db")
     with engine.connect() as conn:
@@ -159,7 +159,7 @@ def get_tele_data(rtu_id, operation="yc"):
             return None
 
 
-def update_tele_data(datas):
+def update_ems_data(type_, datas):
     engine = create_engine("sqlite:///db/ems.db")
     with engine.connect() as conn:
         for data in datas:
@@ -174,8 +174,8 @@ def update_tele_data(datas):
                 return None
 
                 #  ["rtu_id", "pnt_no", "name", "value", "status", "refresh_time"]
-            if len(conn.execute(
-                    f"select * from ems_{operation}_info where rtu_id = {rtu_id} and pnt_no = {pnt_no}").fetchall()):
+            if conn.execute(
+                    f"select * from ems_{operation}_info where rtu_id = {rtu_id} and pnt_no = {pnt_no}"):
                 # already exists
                 conn.execute(
                     f"update ems_{operation}_info set (value, status, refresh_time) = (:value, :status, :refresh_time)",
@@ -186,6 +186,23 @@ def update_tele_data(datas):
                 conn.execute(
                     f'insert into ems_{operation}_info values(:rtu_id, :pnt_no, :name, :value, :status, :refresh_time)',
                     record)
+
+
+def update_rtu_data(rtu_id, type_, data):
+    # establishing a connection to database
+    engine = create_engine(f"sqlite:///db/rtu{rtu_id}.db")
+    operation = type_[:2]
+    with engine.connect() as conn:
+        results = conn.execute(f"select * from rtu_{operation}_info where id = {data['id']}")
+        if results:
+            # already exists
+            conn.execute(
+                f"update rtu_{operation}_info set(id,name,value,refresh_time,ctrl_code)=(:id,:name,:value,"
+                f":refresh_time,:ctrl_code) where id = {data['id']}",
+                data)
+        else:
+            conn.execute(
+                f"insert into rtu_{operation}_info values(:id,:name,:value,:refresh_time,:ctrl_code)",data)
 
 
 if __name__ == "__main__":

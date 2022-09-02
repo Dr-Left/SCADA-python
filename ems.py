@@ -1,22 +1,28 @@
 import socket
 from threading import Thread, Lock
-
+from time import sleep
 
 import database_util
 import socket_util
 
 
 def thread_proc_listen(_sock, _rtu_id):
-    print("ems thread_proc_listen is running!")
+    print(f"ems thread_proc_listen{_rtu_id} is running!")
     while True:
         type_, data = socket_util.recv(_sock)
-        database_util.update_tele_data(data)  # TODO: add a type identifying process in the database_util
-        # print(msg)
+        print(f"ems receive from rtu{_rtu_id}: ", type_, data)
+        if type_[-4:] == "send":
+            database_util.update_ems_data(type_, data)
+            socket_util.send(_sock, type_[:2] + "ret", None, lock)
+            print(f"ems send to rtu{_rtu_id}: ", type_[:2] + "ret")
+            # print(msg)
 
 
 def thread_proc_query(_sock, type_, data):
-    print("query thread_proc_query is running!")
-    socket_util.send(_sock, type_, data, lock)
+    while True:
+        print(f"query thread_proc_query{rtu_id} is running!", type_, data)
+        socket_util.send(_sock, type_, data, lock)
+        sleep(5)
 
 
 if __name__ == "__main__":
@@ -24,11 +30,14 @@ if __name__ == "__main__":
     results = database_util.get_server_addr("ems.db", "ems_rtu_info")
     assert results
     for rtu_id, ip_addr, port in results:
-        print("come to conn", rtu_id, ip_addr, port)
+        print(f"come to conn{rtu_id}", rtu_id, ip_addr, port)
         try:
+            # TODO: multiprocessing the socket connection
             sock = socket.socket()
             sock.connect((ip_addr, port))
-            thread_query = Thread(target=thread_proc_query, args=(sock, "ykcmd", {"Voltage": 100}))
+            # "id", "name", "value", "refresh_time", "ctrl_code"
+            thread_query = Thread(target=thread_proc_query,
+                                  args=(sock, "ykcmd", {"id": 1, "name": f"rtu{rtu_id}.1", "value": 1, "ctrl_code": 1, "refresh_time": 1}))
             thread_query.start()
             thread_listen = Thread(target=thread_proc_listen, args=(sock, rtu_id))
             thread_listen.start()
