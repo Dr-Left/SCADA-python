@@ -2,16 +2,28 @@ import json
 import struct
 
 
-def send(sock, type_, data, lock) -> None:
+def send(sock, type_, data, lock=None) -> None:
+    """
+
+    :param sock:
+    :param type_:
+    :param data:
+    :param lock: if None, then use queue
+    :return:
+    """
     send_data = {"type": type_, "data": data}
     body = json.dumps(send_data).encode("utf-8")  # body is a json string which represents a dict of type & data
     header = struct.pack("i", len(body))
     # TODO: lock    print("send:", header, body)
 
-    lock.acquire()
-    sock.send(header)
-    sock.send(body)
-    lock.release()
+    if lock:
+        lock.acquire()
+        sock.send(header)
+        sock.send(body)
+        lock.release()
+    else:
+        sock.send(header)
+        sock.send(body)
 
 
 def recv(sock) -> tuple[str, dict]:
