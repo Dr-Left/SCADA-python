@@ -1,8 +1,7 @@
-import json
 import socket
 import sys
 import time
-from threading import Thread
+from threading import Thread, Lock
 
 import database_util
 import socket_util
@@ -11,20 +10,29 @@ rtu_id = 1
 database_util.get_tele_data(rtu_id, "yc")
 
 
-def thread_proc(conn, addr):
+def thread_proc_send(_sock):
+    print("rtu thread_proc_send is running!")
     while True:
         records = database_util.get_tele_data(rtu_id, "yc")
-        msg = json.dumps(records)
-        socket_util.send(conn, msg)
-
+        socket_util.send(_sock, "yc", records, lock)
         records = database_util.get_tele_data(rtu_id, "yx")
-        msg = json.dumps(records)
-        socket_util.send(conn, msg)
-
+        socket_util.send(_sock, "yx", records, lock)
         time.sleep(5.0)
 
 
+def thread_proc_listen(_sock):
+    print("rtu thread_proc_listen is running!")
+    while True:
+        type_, data = socket_util.recv(_sock)
+        print(type_)
+        if type_ == "ytcmd":
+            pass
+        elif type_ == "ykcmd":
+            pass
+
+
 if __name__ == "__main__":
+    lock = Lock()
     # establishing a connection to database
     print("sys.argv = ", sys.argv[1:])
     if len(sys.argv) > 1:
@@ -38,15 +46,10 @@ if __name__ == "__main__":
     server.listen(10)
 
     while True:
-        print("come to wait accept ...")
-        conn, addr = server.accept()
-        print("get accept", conn, addr)
-        t1 = Thread(target=thread_proc, args=(conn, addr))
-        t1.start()
-        # msg = conn.recv(head_len[0]).decode("utf-8")
-        # header = conn.recv(4)
-        # head_len = struct.unpack("i", header)
-
-        # print(msg)
-        # msg = msg.upper()
-        # conn.send(msg.encode("utf-8"))
+        print(f"rtu{rtu_id} come to wait accept ...")
+        sock, addr = server.accept()
+        print(f"rtu{rtu_id} get accept！", sock, addr)
+        thread_send = Thread(target=thread_proc_send, args=(sock, ))
+        thread_send.start()
+        thread_listen = Thread(target=thread_proc_send, args=(sock, ))
+        thread_listen.start()

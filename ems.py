@@ -1,43 +1,36 @@
-import json
 import socket
-from threading import Thread
+from threading import Thread, Lock
+
 
 import database_util
 import socket_util
 
 
-def thread_proc(rtu_id, ip_addr, port):
-    try:
-        print("come to conn", rtu_id, ip_addr, port)
-        sock = socket.socket()
-        sock.connect((ip_addr, port))
-        while True:
-            recv = socket_util.recv(sock)
-            try:
-                msg = json.loads(recv)  # a list of dict
-            except Exception as err:
-                print("bad data!")
-                print(recv)
-                print(err)
-            database_util.update_tele_data(msg)
-            # print(msg)
+def thread_proc_listen(_sock, _rtu_id):
+    print("ems thread_proc_listen is running!")
+    while True:
+        type_, data = socket_util.recv(_sock)
+        database_util.update_tele_data(data)  # TODO: add a type identifying process in the database_util
+        # print(msg)
 
-    except Exception as err:
-        print(err)
+
+def thread_proc_query(_sock, type_, data):
+    print("query thread_proc_query is running!")
+    socket_util.send(_sock, type_, data, lock)
 
 
 if __name__ == "__main__":
+    lock = Lock()
     results = database_util.get_server_addr("ems.db", "ems_rtu_info")
     assert results
     for rtu_id, ip_addr, port in results:
-        thread = Thread(target=thread_proc, args=(rtu_id, ip_addr, port))
-        thread.start()
-    # client = socket.socket()
-    # client.connect(server_addr)
-    # while True:
-    #     msg = input("Please enter the message: >>").strip()
-    #     header = struct.pack("i", len(msg))
-    #     client.send(header)
-    #     client.send(msg.encode("utf-8"))
-    #     recv = client.recv(1024)
-    #     print(recv.decode("utf-8"))
+        print("come to conn", rtu_id, ip_addr, port)
+        try:
+            sock = socket.socket()
+            sock.connect((ip_addr, port))
+            thread_query = Thread(target=thread_proc_query, args=(sock, "ykcmd", {"Voltage": 100}))
+            thread_query.start()
+            thread_listen = Thread(target=thread_proc_listen, args=(sock, rtu_id))
+            thread_listen.start()
+        except ConnectionRefusedError as err:
+            print(err)
