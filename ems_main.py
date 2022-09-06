@@ -156,7 +156,6 @@ class MyMainWnd(QMainWindow):
             self.ui.labelAutoRefreshPeriod.setText("自动刷新周期: 已禁用")
 
 
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     wnd = MyMainWnd()
