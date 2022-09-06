@@ -172,17 +172,18 @@ def update_ems_data(type_, datas):
             except Exception as err:
                 print("Bad data columns!", err)
                 return None
-
+            print("rtu_id = ", rtu_id)
                 #  ["rtu_id", "pnt_no", "name", "value", "status", "refresh_time"]
-            if conn.execute(
-                    f"select * from ems_{operation}_info where rtu_id = {rtu_id} and pnt_no = {pnt_no}"):
+            results = conn.execute(
+                    f"select * from ems_{operation}_info where rtu_id = {rtu_id} and pnt_no = {pnt_no}").fetchall()
+            if len(results) > 0:
                 # already exists
                 conn.execute(
-                    f"update ems_{operation}_info set (value, status, refresh_time) = (:value, :status, :refresh_time)",
+                    f"update ems_{operation}_info set (value, status, refresh_time) = (:value, :status, :refresh_time) where rtu_id = {rtu_id} and pnt_no = {pnt_no}",
                     record)
             else:
                 # newly insert
-                print(data)
+                print(f"insert into: rtu{rtu_id}:", data)
                 conn.execute(
                     f'insert into ems_{operation}_info values(:rtu_id, :pnt_no, :name, :value, :status, :refresh_time)',
                     record)
@@ -193,8 +194,8 @@ def update_rtu_data(rtu_id, type_, data):
     engine = create_engine(f"sqlite:///db/rtu{rtu_id}.db")
     operation = type_[:2]
     with engine.connect() as conn:
-        results = conn.execute(f"select * from rtu_{operation}_info where id = {data['id']}")
-        if results:
+        results = conn.execute(f"select * from rtu_{operation}_info where id = {data['id']}").fetchall()
+        if len(results) > 0:
             # already exists
             conn.execute(
                 f"update rtu_{operation}_info set(id,name,value,refresh_time,ctrl_code)=(:id,:name,:value,"
@@ -202,7 +203,7 @@ def update_rtu_data(rtu_id, type_, data):
                 data)
         else:
             conn.execute(
-                f"insert into rtu_{operation}_info values(:id,:name,:value,:refresh_time,:ctrl_code)",data)
+                f"insert into rtu_{operation}_info values(:id,:name,:value,:refresh_time,:ctrl_code)", data)
 
 
 if __name__ == "__main__":
