@@ -1,5 +1,6 @@
 import random
 import socket
+import time
 from queue import Queue
 from threading import Thread, Lock
 from time import sleep
@@ -20,7 +21,7 @@ def thread_proc_listen(_sock, _rtu_id, queue_send):
         type_, data = socket_util.recv(_sock)
         print(f"ems receive from rtu{_rtu_id}: ", type_, data)
         if type_[-4:] == "send":
-            database_util.update_ems_data(type_, data)
+            database_util.update_ems_ycyx_data(type_, data)
             queue_send.put((type_[:2]+"ret", None))
             # socket_util.send(_sock, type_[:2] + "ret", None)  # no lock, use queue technique
             print(f"ems send to rtu{_rtu_id}: ", type_[:2] + "ret")
@@ -29,10 +30,14 @@ def thread_proc_listen(_sock, _rtu_id, queue_send):
 
 def thread_proc_query(_sock, type_, data, queue_send):
     while True:
-        print(f"query thread_proc_query{rtu_id} is running!", type_, data)
-        queue_send.put((type_, data))
-        # socket_util.send(_sock, type_, data)  # no lock, use queue technique
-        sleep(random.randint(3, 5))
+        for pnt_no in range(1, 6+1):
+            data["value"] = random.randint(1, 10)
+            data["id"] = pnt_no
+            print(f"query thread_proc_query{rtu_id} is running!", type_, data)
+            queue_send.put((type_, data))
+            # socket_util.send(_sock, type_, data)  # no lock, use queue technique
+            database_util.update_ems_ykyt_data(type_, data)
+            sleep(2)
 
 
 if __name__ == "__main__":
@@ -49,14 +54,13 @@ if __name__ == "__main__":
             # "id", "name", "value", "refresh_time", "ctrl_code"
             thread_senddata = Thread(target=thread_proc_senddata,
                                      args=(sock, queue_send))
-
             thread_query = Thread(target=thread_proc_query,
                                   args=(sock, "ykcmd", {"id": 1, "name": f"rtu{rtu_id}.1", "value": 1, "ctrl_code": 1,
-                                                        "refresh_time": 1}, queue_send))
+                                                        "refresh_time": int(time.time())}, queue_send))
             thread_query.start()
             thread_query1 = Thread(target=thread_proc_query,
                                   args=(sock, "ytcmd", {"id": 1, "name": f"rtu{rtu_id}.1", "value": 2.0, "ctrl_code": 1,
-                                                        "refresh_time": 1}, queue_send))
+                                                        "refresh_time": int(time.time())}, queue_send))
             thread_query1.start()
             thread_listen = Thread(target=thread_proc_listen, args=(sock, rtu_id, queue_send))
             thread_listen.start()

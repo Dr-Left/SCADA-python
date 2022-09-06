@@ -1,6 +1,8 @@
 """
 run this script to create databases for testing & debugging
 """
+import time
+
 from sqlalchemy import create_engine
 
 operation_map = {"yc": 1, "yx": 2, "yt": 3, "yk": 4}
@@ -26,13 +28,13 @@ ems_tables = [
     },
     {
         "name": "ems_yt_info",
-        "columns": ["rtu_id", "pnt_no", "name", "value", "refresh_time", "ret_code"],
+        "columns": ["rtu_id", "pnt_no", "name", "value", "ret_code", "refresh_time"],
         "attribution": ["int", "int", "varchar2(64)", "float", "int", "int"],
         "primary keys": [1, 1, 0, 0, 0, 0]
     },
     {
         "name": "ems_yk_info",
-        "columns": ["rtu_id", "pnt_no", "name", "value", "refresh_time", "ret_code"],
+        "columns": ["rtu_id", "pnt_no", "name", "value", "ret_code", "refresh_time"],
         "attribution": ["int", "int", "varchar2(64)", "int", "int", "int"],
         "primary keys": [1, 1, 0, 0, 0, 0]
     },
@@ -80,20 +82,20 @@ def work():
         # insert mocking data
         for rtu_id in range(1, 7):
             conn1.execute(
-                f'insert into ems_rtu_info values({rtu_id}, "rtu{rtu_id}", "127.0.0.1", 66{rtu_id + 65}, 0, 0)')
+                f'insert into ems_rtu_info values({rtu_id}, "rtu{rtu_id}", "127.0.0.1", 66{rtu_id + 65}, 0, {int(time.time())})')
 
     for rtu_id in range(1, 7):
         engine2 = create_engine(f"sqlite:///db/rtu{rtu_id}.db")
         with engine2.connect() as conn2:
             create_table(conn2, rtu_tables)
-            conn2.execute(f'insert into rtu_info values({rtu_id}, "rtu{rtu_id}", "127.0.0.1", 66{rtu_id + 65}, 0, 0)')
+            conn2.execute(f'insert into rtu_info values({rtu_id}, "rtu{rtu_id}", "127.0.0.1", 66{rtu_id + 65}, 0, {int(time.time())})')
             for operation in range(1, 5):
                 records = []
                 table = rtu_tables[operation]
                 name = table["name"][4:6]  # yc
                 column_cnt = len(table["columns"])
                 for i in range(1, 7):
-                    record = {"id": i, "name": name + f".rtu{rtu_id}.{i}", "value": 0, "status": 0, "refresh_time": 0}
+                    record = {"id": i, "name": name + f".rtu{rtu_id}.{i}", "value": 0, "status": 0, "refresh_time": int(time.time())}
                     records.append(record)
                 # print(records)
                 conn2.execute(f"insert into rtu_{name}_info values(:id, :name, :value, :status, :refresh_time)",
@@ -159,7 +161,7 @@ def get_rtu_data(rtu_id, operation, _lock):
             return None
 
 
-def update_ems_data(type_, datas):
+def update_ems_ycyx_data(type_, datas):
     engine = create_engine("sqlite:///db/ems.db")
     with engine.connect() as conn:
         for data in datas:
@@ -172,7 +174,6 @@ def update_ems_data(type_, datas):
             except Exception as err:
                 print("Bad data columns!", err)
                 return None
-            print("rtu_id = ", rtu_id)
                 #  ["rtu_id", "pnt_no", "name", "value", "status", "refresh_time"]
             results = conn.execute(
                     f"select * from ems_{operation}_info where rtu_id = {rtu_id} and pnt_no = {pnt_no}").fetchall()
@@ -183,10 +184,39 @@ def update_ems_data(type_, datas):
                     record)
             else:
                 # newly insert
-                print(f"insert into: rtu{rtu_id}:", data)
                 conn.execute(
                     f'insert into ems_{operation}_info values(:rtu_id, :pnt_no, :name, :value, :status, :refresh_time)',
                     record)
+
+
+def update_ems_ykyt_data(type_, data):
+    engine = create_engine("sqlite:///db/ems.db")
+    with engine.connect() as conn:
+        pnt_no = data["id"]
+        operation = type_[:2]
+        print("name: ", data["name"])
+        rtu_id = int(data["name"][-3])
+        pnt_no = int(data["name"][-1])
+        try:
+            record = dict(zip(ems_tables[operation_map[operation]]["columns"],
+                              [rtu_id, pnt_no, data["name"], data["value"], data["ctrl_code"], data["refresh_time"]]))
+        except Exception as err:
+            print("Bad data columns!", err)
+            return None
+        #  ["rtu_id", "pnt_no", "name", "value", "refresh_time", "ret_code"]
+        results = conn.execute(
+            f"select * from ems_{operation}_info where rtu_id = {rtu_id} and pnt_no = {pnt_no}").fetchall()
+        if len(results) > 0:
+            # already exists
+            conn.execute(
+                f"update ems_{operation}_info set (value, ret_code, refresh_time) = (:value, :ret_code, :refresh_time) where rtu_id = {rtu_id} and pnt_no = {pnt_no}",
+                record)
+        else:
+            # newly insert
+            print(f"insert into ems_{operation}")
+            conn.execute(
+                f'insert into ems_{operation}_info values(:rtu_id, :pnt_no, :name, :value, :ret_code, :refresh_time)',
+                record)
 
 
 def update_rtu_data(rtu_id, type_, data):
